@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 
-
+// --------------------------------------------
+// 1) Wyjątki
+// --------------------------------------------
 public class OverfillException : Exception
 {
     public OverfillException(string message) : base(message) { }
@@ -12,14 +14,17 @@ public class DangerousOperationException : Exception
     public DangerousOperationException(string message) : base(message) { }
 }
 
+// --------------------------------------------
+// 2) Interfejs do notyfikacji o sytuacjach niebezpiecznych
+// --------------------------------------------
 public interface IHazardNotifier
 {
     void NotifyHazard(string message);
 }
 
-// -----------------------------------------------------
-// 3) Enum Produkt - typy produktów dla kontenerów chłodniczych
-// -----------------------------------------------------
+// --------------------------------------------
+// 3) Enum - rodzaje produktów dla kontenerów chłodniczych
+// --------------------------------------------
 public enum Produkt
 {
     Banany,
@@ -34,19 +39,18 @@ public enum Produkt
     Jajka
 }
 
-// -----------------------------------------------------
+// --------------------------------------------
 // 4) Klasa bazowa Kontener
-// -----------------------------------------------------
+// --------------------------------------------
 public abstract class Kontener
 {
-    public double MasaLadunku { get; protected set; } // w kg
-    public double WagaWlasna { get; protected set; }  // w kg
-    public double Wysokosc { get; protected set; }    // w cm
-    public double Glebokosc { get; protected set; }   // w cm
-    public double MaksymalnaLadownosc { get; protected set; } // w kg
+    public double MasaLadunku { get; protected set; }
+    public double WagaWlasna { get; protected set; }
+    public double Wysokosc { get; protected set; }
+    public double Glebokosc { get; protected set; }
+    public double MaksymalnaLadownosc { get; protected set; }
     public string NumerSeryjny { get; protected set; }
 
-    // Konstruktor bazowy
     public Kontener(double wagaWlasna, double wysokosc, double glebokosc, double maksLadownosc)
     {
         WagaWlasna = wagaWlasna;
@@ -55,44 +59,50 @@ public abstract class Kontener
         MaksymalnaLadownosc = maksLadownosc;
     }
 
-    // Metoda do załadowania ładunku
+    // Załadowanie ładunku
     public virtual void Zaladuj(double masa)
     {
         double nowaMasa = MasaLadunku + masa;
         if (nowaMasa > MaksymalnaLadownosc)
         {
-            throw new OverfillException(
-                $"Próba załadowania {masa} kg przekracza pojemność kontenera (max {MaksymalnaLadownosc} kg).");
+            throw new OverfillException($"Ładunek {masa} kg przekracza pojemność kontenera (max {MaksymalnaLadownosc} kg).");
         }
         MasaLadunku = nowaMasa;
     }
 
-    // Metoda do rozładowania kontenera (całkowite)
+    // Rozładowanie kontenera (domyślnie do zera)
     public virtual void Rozladuj()
     {
         MasaLadunku = 0;
     }
 
-    // Całkowita waga kontenera (waga własna + masa ładunku)
+    // Waga całkowita (kontener + ładunek)
     public double CalkowitaWaga => WagaWlasna + MasaLadunku;
 
-    // Pomocnicza metoda do generowania numerów seryjnych
-    // Format: KON-{typ kontenera}-{liczba unikalna}
+    // Generowanie unikalnego numeru seryjnego
     protected static string GenerujNumer(string typKontenera, ref int licznik)
     {
         licznik++;
         return $"KON-{typKontenera}-{licznik}";
     }
+
+    // Wypisanie informacji o kontenerze (wymóg: "Wypisanie informacji o danym kontenerze")
+    public virtual void WypiszInformacjeOKontenerze()
+    {
+        Console.WriteLine($"Kontener: {NumerSeryjny}");
+        Console.WriteLine($"  Masa ładunku: {MasaLadunku} kg");
+        Console.WriteLine($"  Waga własna: {WagaWlasna} kg");
+        Console.WriteLine($"  Waga całkowita: {CalkowitaWaga} kg (max ładowność {MaksymalnaLadownosc} kg)");
+        Console.WriteLine();
+    }
 }
 
-// -----------------------------------------------------
+// --------------------------------------------
 // 5) KontenerNaCiecze
-//    - L (Liquid), może być niebezpieczny lub zwykły
-// -----------------------------------------------------
+// --------------------------------------------
 public class KontenerNaCiecze : Kontener, IHazardNotifier
 {
-    private static int _licznik = 0;  // służy do unikalnego numeru seryjnego
-
+    private static int _licznik = 0;
     public bool LadunekNiebezpieczny { get; private set; }
 
     public KontenerNaCiecze(double wagaWlasna, double wysokosc, double glebokosc,
@@ -105,37 +115,31 @@ public class KontenerNaCiecze : Kontener, IHazardNotifier
 
     public override void Zaladuj(double masa)
     {
-        // Jeśli ładunek niebezpieczny, można załadować maks 50% pojemności
-        // Jeśli zwykły, do 90%
+        // Limit 50% jeśli niebezpieczny, 90% jeśli zwykły
         double limit = LadunekNiebezpieczny ? 0.5 : 0.9;
         double maksMozliwe = MaksymalnaLadownosc * limit;
 
         if (MasaLadunku + masa > maksMozliwe)
         {
-            // Zgłaszamy niebezpieczną sytuację
-            NotifyHazard($"Próba załadowania {masa} kg narusza limit " +
-                         $"({limit * 100}% pojemności = {maksMozliwe} kg).");
-            throw new DangerousOperationException(
-                $"Niebezpieczna operacja: przekroczono {limit * 100}% pojemności kontenera.");
+            NotifyHazard($"Przekroczono {limit * 100}% pojemności (max {maksMozliwe} kg).");
+            throw new DangerousOperationException($"Niebezpieczna operacja: >{limit * 100}% pojemności.");
         }
-
         base.Zaladuj(masa);
     }
 
     public void NotifyHazard(string message)
     {
-        Console.WriteLine($"[ALERT] Kontener {NumerSeryjny}: {message}");
+        Console.WriteLine($"[UWAGA] {NumerSeryjny}: {message}");
     }
 }
 
-// -----------------------------------------------------
+// --------------------------------------------
 // 6) KontenerNaGaz
-//    - G (Gas), przechowuje dodatkowo info o ciśnieniu
-// -----------------------------------------------------
+// --------------------------------------------
 public class KontenerNaGaz : Kontener, IHazardNotifier
 {
     private static int _licznik = 0;
-    public double Cisnienie { get; private set; } // w atmosferach
+    public double Cisnienie { get; private set; }
 
     public KontenerNaGaz(double wagaWlasna, double wysokosc, double glebokosc,
                          double maksLadownosc, double cisnienie)
@@ -147,40 +151,39 @@ public class KontenerNaGaz : Kontener, IHazardNotifier
 
     public override void Rozladuj()
     {
-        // W kontenerze gazowym zostaje 5% ładunku
+        // Zostaje 5% ładunku
         MasaLadunku *= 0.05;
     }
 
     public void NotifyHazard(string message)
     {
-        Console.WriteLine($"[ALERT] Kontener {NumerSeryjny}: {message}");
+        Console.WriteLine($"[UWAGA] {NumerSeryjny}: {message}");
     }
 }
 
-// -----------------------------------------------------
+// --------------------------------------------
 // 7) KontenerChlodniczy
-//    - C (Cold), przechowuje typ produktu i temperaturę
-// -----------------------------------------------------
+// --------------------------------------------
 public class KontenerChlodniczy : Kontener
 {
     private static int _licznik = 0;
 
     public Produkt TypProduktu { get; private set; }
-    public double Temperatura { get; private set; } // w °C
+    public double Temperatura { get; private set; }
 
-    // Minimalne temperatury dla poszczególnych produktów (przykładowe wartości).
+    // Minimalne temperatury (stała tabela)
     private static readonly Dictionary<Produkt, double> MinimalnaTemp = new Dictionary<Produkt, double>
     {
-        { Produkt.Banany, 13.3 },
-        { Produkt.Czekolada, 18 },
-        { Produkt.Ryby, 2 },
-        { Produkt.Mieso, -15 },
-        { Produkt.Lody, -18 },
-        { Produkt.MrozonaPizza, -30 },
-        { Produkt.Ser, 7.2 },
-        { Produkt.Kielbasa, 5 },
-        { Produkt.Maslo, 20.5 },
-        { Produkt.Jajka, 19 }
+        { Produkt.Banany,       13.3 },
+        { Produkt.Czekolada,    18   },
+        { Produkt.Ryby,         2    },
+        { Produkt.Mieso,        -15  },
+        { Produkt.Lody,         -18  },
+        { Produkt.MrozonaPizza, -30  },
+        { Produkt.Ser,          7.2  },
+        { Produkt.Kielbasa,     5    },
+        { Produkt.Maslo,        20.5 },
+        { Produkt.Jajka,        19   }
     };
 
     public KontenerChlodniczy(double wagaWlasna, double wysokosc, double glebokosc,
@@ -188,23 +191,26 @@ public class KontenerChlodniczy : Kontener
         : base(wagaWlasna, wysokosc, glebokosc, maksLadownosc)
     {
         TypProduktu = produkt;
-
-        // Sprawdź czy temperatura nie jest niższa niż wymagana
-        double wymaganeMin = MinimalnaTemp[produkt];
-        if (temperatura < wymaganeMin)
+        double minTemp = MinimalnaTemp[produkt];
+        if (temperatura < minTemp)
         {
-            throw new ArgumentException(
-                $"Temperatura {temperatura}°C jest niższa niż wymagana {wymaganeMin}°C dla produktu {produkt}.");
+            throw new ArgumentException($"Zbyt niska temp. {temperatura}°C dla produktu {produkt} (min {minTemp}°C).");
         }
-
         Temperatura = temperatura;
         NumerSeryjny = GenerujNumer("C", ref _licznik);
     }
+
+    // Opcjonalnie krótkie info
+    public override void WypiszInformacjeOKontenerze()
+    {
+        base.WypiszInformacjeOKontenerze();
+        Console.WriteLine($"  Typ produktu: {TypProduktu}, temperatura: {Temperatura}°C\n");
+    }
 }
 
-// -----------------------------------------------------
-// 8) Klasa Kontenerowiec
-// -----------------------------------------------------
+// --------------------------------------------
+// 8) Klasa Kontenerowiec (statek)
+// --------------------------------------------
 public class Kontenerowiec
 {
     public string NazwaStatku { get; private set; }
@@ -222,35 +228,26 @@ public class Kontenerowiec
         MaksWagaWszystkichKontenerowTon = maksWagaTon;
     }
 
-    // Metoda do załadowania kontenera
+    // Załadowanie pojedynczego kontenera
     public void ZaladujKontener(Kontener k)
     {
         if (_kontenery.Count >= MaksLiczbaKontenerow)
-        {
-            throw new InvalidOperationException(
-                $"Przekroczono maksymalną liczbę kontenerów ({MaksLiczbaKontenerow}).");
-        }
+            throw new InvalidOperationException($"Przekroczono liczbę kontenerów (max {MaksLiczbaKontenerow}).");
 
-        double aktualnaWagaTon = ObliczAktualnaWageKontenerow() / 1000.0; // kg na tony
-        double wagaPoDoladowaniu = (aktualnaWagaTon + k.CalkowitaWaga / 1000.0);
+        double wagaAktualnaTon = ObliczAktualnaWageKontenerow() / 1000.0;
+        double wagaPoDoladowaniu = wagaAktualnaTon + (k.CalkowitaWaga / 1000.0);
 
         if (wagaPoDoladowaniu > MaksWagaWszystkichKontenerowTon)
         {
-            throw new InvalidOperationException(
-                $"Załadowanie kontenera przekroczy maksymalną wagę statku " +
-                $"({MaksWagaWszystkichKontenerowTon} ton). Aktualnie: {wagaPoDoladowaniu:F2} ton.");
+            throw new InvalidOperationException($"Przekroczono dopuszczalną masę (max {MaksWagaWszystkichKontenerowTon} t).");
         }
-
         _kontenery.Add(k);
     }
 
     // Załadowanie listy kontenerów
     public void ZaladujKontenery(IEnumerable<Kontener> kontenery)
     {
-        foreach (var k in kontenery)
-        {
-            ZaladujKontener(k);
-        }
+        foreach (var k in kontenery) ZaladujKontener(k);
     }
 
     // Usunięcie kontenera
@@ -259,158 +256,140 @@ public class Kontenerowiec
         _kontenery.Remove(k);
     }
 
-    // Rozładowanie (opróżnienie) ładunku w danym kontenerze
+    // Rozładowanie kontenera
     public void RozladujKontener(Kontener k)
     {
         k.Rozladuj();
     }
 
-    // Zastąpienie kontenera innym (pod warunkiem, że stary istnieje na statku)
+    // Zastąpienie kontenera innym
     public void ZastapKontener(Kontener stary, Kontener nowy)
     {
-        if (_kontenery.Contains(stary))
-        {
-            UsunKontener(stary);
-            ZaladujKontener(nowy);
-        }
-        else
-        {
-            throw new ArgumentException("Nie można zastąpić kontenera – nie ma go na statku.");
-        }
+        if (!_kontenery.Contains(stary))
+            throw new ArgumentException("Brak takiego kontenera na statku.");
+
+        UsunKontener(stary);
+        ZaladujKontener(nowy);
     }
 
-    // Przeniesienie kontenera między dwoma statkami
+    // Statyczna metoda do przenoszenia kontenera między statkami
     public static void PrzeniesKontener(Kontener k, Kontenerowiec zrodlo, Kontenerowiec cel)
     {
         if (!zrodlo._kontenery.Contains(k))
-        {
             throw new ArgumentException("Kontener nie znajduje się na statku źródłowym.");
-        }
 
-        // Najpierw usuwamy ze statku źródłowego
         zrodlo.UsunKontener(k);
-
-        // Następnie ładujemy na statek docelowy
         cel.ZaladujKontener(k);
     }
 
     // Wypisanie informacji o statku i jego ładunku
-    public void WypiszInformacje()
+    public void WypiszInformacjeOStatku()
     {
-        Console.WriteLine($"--- Statek: {NazwaStatku} ---");
-        Console.WriteLine($"Maks. prędkość (węzły): {MaksymalnaPredkoscWezly}");
-        Console.WriteLine($"Ładowność kontenerów: {MaksLiczbaKontenerow} szt., {MaksWagaWszystkichKontenerowTon} ton.");
-        Console.WriteLine($"Obecna liczba kontenerów: {_kontenery.Count}, ich łączna waga: {ObliczAktualnaWageKontenerow()} kg");
-        Console.WriteLine("Lista kontenerów:");
-
+        Console.WriteLine($"--- {NazwaStatku} ---");
+        Console.WriteLine($"  Prędkość max: {MaksymalnaPredkoscWezly} węzłów");
+        Console.WriteLine($"  Kontenery: {_kontenery.Count}/{MaksLiczbaKontenerow}");
+        Console.WriteLine($"  Waga ładunku: {ObliczAktualnaWageKontenerow()} kg (max {MaksWagaWszystkichKontenerowTon} t)");
+        Console.WriteLine("  Lista kontenerów:");
         foreach (var kontener in _kontenery)
         {
-            Console.WriteLine($"  - {kontener.NumerSeryjny}, masa ładunku: {kontener.MasaLadunku} kg, " +
-                              $"całk. waga: {kontener.CalkowitaWaga} kg");
+            Console.WriteLine($"    - {kontener.NumerSeryjny} | masa ładunku: {kontener.MasaLadunku} kg | waga całk.: {kontener.CalkowitaWaga} kg");
         }
         Console.WriteLine();
     }
 
-    // Oblicz całkowitą wagę kontenerów w kg
+    // Łączna waga w kg
     public double ObliczAktualnaWageKontenerow()
     {
         double suma = 0;
-        foreach (var k in _kontenery)
-        {
-            suma += k.CalkowitaWaga;
-        }
+        foreach (var k in _kontenery) suma += k.CalkowitaWaga;
         return suma;
     }
 }
 
-// -----------------------------------------------------
-// 9) Klasa Program z metodą Main - demonstracja
-// -----------------------------------------------------
+// --------------------------------------------
+// 9) Program (metoda Main) - demonstracja
+// --------------------------------------------
 public class Program
 {
     public static void Main(string[] args)
     {
         try
         {
-            // Tworzymy dwa statki
-            Kontenerowiec statekA = new Kontenerowiec("Posejdon", 25.0, 5, 100); // 100 ton
-            Kontenerowiec statekB = new Kontenerowiec("Neptun", 20.0, 3, 50);   // 50 ton
 
-            // Tworzymy kontenery różnych typów
-            KontenerNaCiecze kontenerMleko = new KontenerNaCiecze(
-                wagaWlasna: 1000, wysokosc: 200, glebokosc: 300, maksLadownosc: 5000,
-                ladunekNiebezpieczny: false);
+            KontenerNaCiecze kontenerSok = new KontenerNaCiecze(900, 200, 300, 4000, false);
+            KontenerNaCiecze kontenerChemia = new KontenerNaCiecze(1200, 220, 310, 7000, true);
+            KontenerNaGaz kontenerHel = new KontenerNaGaz(800, 180, 250, 3000, 10.0);
+            KontenerChlodniczy kontenerBanany = new KontenerChlodniczy(1500, 250, 400, 5000, Produkt.Banany, 14);
+            KontenerChlodniczy kontenerLody = new KontenerChlodniczy(1800, 260, 400, 6000, Produkt.Lody, -18);
 
-            KontenerNaCiecze kontenerPaliwo = new KontenerNaCiecze(
-                wagaWlasna: 1200, wysokosc: 220, glebokosc: 300, maksLadownosc: 8000,
-                ladunekNiebezpieczny: true);
+            kontenerSok.Zaladuj(3000);        // 90% z 4000 = 3600 -> OK
+            kontenerChemia.Zaladuj(3500);     // 50% z 7000 = 3500 -> OK
+            kontenerHel.Zaladuj(2000);        // max 3000 -> OK
+            kontenerBanany.Zaladuj(2000);     // wystarczy że nie przekracza 5000
+            kontenerLody.Zaladuj(4000);       // max 6000
 
-            KontenerNaGaz kontenerHel = new KontenerNaGaz(
-                wagaWlasna: 800, wysokosc: 200, glebokosc: 200, maksLadownosc: 3000,
-                cisnienie: 10.5);
+            Kontenerowiec statekA = new Kontenerowiec("statekA", 25, 4, 80);
+            Kontenerowiec statekB = new Kontenerowiec("statekB", 20, 5, 120);
 
-            KontenerChlodniczy kontenerBanany = new KontenerChlodniczy(
-                wagaWlasna: 1500, wysokosc: 250, glebokosc: 400, maksLadownosc: 6000,
-                produkt: Produkt.Banany, temperatura: 15);
+            statekA.ZaladujKontener(kontenerSok);
+            statekA.ZaladujKontener(kontenerChemia);
+            // Uwaga: jeśli spróbujemy załadować kolejny, może przekroczyć liczbę 3 kontenerów lub dopuszczalną wagę
 
-            KontenerChlodniczy kontenerLody = new KontenerChlodniczy(
-                wagaWlasna: 2000, wysokosc: 250, glebokosc: 400, maksLadownosc: 7000,
-                produkt: Produkt.Lody, temperatura: -18);
+            var listaKontenerow = new List<Kontener> { kontenerHel, kontenerBanany };
+            statekA.ZaladujKontenery(listaKontenerow);
 
-            // Zaladuj ładunek do kontenerów (z demonstracją ewentualnych wyjątków)
-            kontenerMleko.Zaladuj(4000);        // ok (zwykły ładunek, limit 90% z 5000 = 4500)
-            //kontenerMleko.Zaladuj(600);      // to by przekroczyło limit i rzuciło wyjątek
 
-            kontenerPaliwo.Zaladuj(4000);       // ok (niebezpieczny - 50% z 8000 = 4000)
-            //kontenerPaliwo.Zaladuj(1);       // przekroczenie -> wyrzuciłoby DangerousOperationException
+            Console.WriteLine(">>> STAN STATKU A PO ZAŁADOWANIU (Posejdon) <<<");
+            statekA.WypiszInformacjeOStatku();
 
-            kontenerHel.Zaladuj(2500);          // ok (zwykłe sprawdzenie Overfill)
 
-            // Zaladuj kontenery na statek A
-            statekA.ZaladujKontener(kontenerMleko);
-            statekA.ZaladujKontener(kontenerPaliwo);
-            statekA.ZaladujKontener(kontenerHel);
+            Console.WriteLine("Usuwamy kontener z chemią ze statku A...");
+            statekA.UsunKontener(kontenerChemia);
 
-            // Możemy też ładować listą
-            var listaChlodniczych = new List<Kontener> { kontenerBanany, kontenerLody };
-            statekA.ZaladujKontenery(listaChlodniczych);
 
-            // Wypisz info o statku A
-            statekA.WypiszInformacje();
+            Console.WriteLine("Rozładowujemy (opróżniamy) kontener Sok...");
+            statekA.RozladujKontener(kontenerSok);
 
-            // Przenieś jeden z kontenerów na statek B
+
+            Console.WriteLine("Załadujmy kontener Lody na statek B (Neptun)...");
+            statekB.ZaladujKontener(kontenerLody);
+
+
+            Console.WriteLine(">>> STAN STATKU B (Neptun) <<<");
+            statekB.WypiszInformacjeOStatku();
+
+
+            Console.WriteLine("Zastępujemy kontener Banany kontenerem Chemia na statku A...");
+            // Najpierw załadujemy kontener Chemia z powrotem, bo usunęliśmy go
+            // (można też pominąć i użyć innego kontenera)
+            statekA.ZaladujKontener(kontenerChemia);
+            statekA.ZastapKontener(kontenerBanany, kontenerChemia);
+
+
+            Console.WriteLine("Przenosimy kontener Hel ze statku A na B...");
             Kontenerowiec.PrzeniesKontener(kontenerHel, statekA, statekB);
 
-            Console.WriteLine("Po przeniesieniu kontenera z Helem na statek B:");
-            statekA.WypiszInformacje();
-            statekB.WypiszInformacje();
 
-            // Zamień (zastąp) kontener bananów kontenerem lodów na statku A
-            statekA.ZastapKontener(kontenerBanany, kontenerLody);
+            Console.WriteLine(">>> Informacje o kontenerze Hel (po przeniesieniu) <<<");
+            kontenerHel.WypiszInformacjeOKontenerze();
 
-            Console.WriteLine("Po zastąpieniu kontenera bananów kontenerem lodów na statku A:");
-            statekA.WypiszInformacje();
 
-            // Rozładuj kontener z paliwem
-            statekA.RozladujKontener(kontenerPaliwo);
-
-            // Rozładuj kontener gazowy (zostaje 5% masy)
-            statekB.RozladujKontener(kontenerHel);
-            Console.WriteLine($"Po rozładunku w kontenerze Hel (zostaje 5%): {kontenerHel.MasaLadunku} kg");
-
+            Console.WriteLine(">>> STAN OSTATECZNY STATKU A  <<<");
+            statekA.WypiszInformacjeOStatku();
+            Console.WriteLine(">>> STAN OSTATECZNY STATKU B  <<<");
+            statekB.WypiszInformacjeOStatku();
         }
         catch (OverfillException ex)
         {
-            Console.WriteLine($"Błąd pojemności: {ex.Message}");
+            Console.WriteLine($"[Błąd pojemności] {ex.Message}");
         }
         catch (DangerousOperationException ex)
         {
-            Console.WriteLine($"Niebezpieczna operacja: {ex.Message}");
+            Console.WriteLine($"[Operacja niebezpieczna] {ex.Message}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Inny błąd: {ex.Message}");
+            Console.WriteLine($"[Inny błąd] {ex.Message}");
         }
     }
 }
-
